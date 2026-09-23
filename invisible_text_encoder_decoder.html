@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Invisible Text Encoder / Decoder</title>
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;max-width:760px;margin:40px auto;padding:20px;background:#111;color:#eee}
+h1{font-size:28px} textarea{width:100%;box-sizing:border-box;min-height:130px;margin:8px 0 14px;padding:12px;border-radius:10px;border:1px solid #444;background:#1b1b1b;color:#fff;resize:vertical}
+button{padding:10px 16px;margin:4px;border:0;border-radius:9px;cursor:pointer;font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px}.box{margin:24px 0}
+small{color:#aaa}
+#status{min-height:22px;color:#aaa}
+</style>
+</head>
+<body>
+<h1>Invisible Text Encoder / Decoder</h1>
+<p>Encode a message into zero-width Unicode characters, then paste the invisible result into Discord or another text field. Decode it here to recover the message.</p>
+
+<div class="box">
+<h2>Encode</h2>
+<textarea id="plain" placeholder="Type your secret message here..."></textarea>
+<div class="row">
+<button onclick="encode()">Encode</button>
+<button onclick="copyText('encoded')">Copy invisible text</button>
+<button onclick="clearBox('plain')">Clear</button>
+</div>
+<textarea id="encoded" readonly placeholder="Your invisible text will appear here..."></textarea>
+<small id="encInfo"></small>
+</div>
+
+<div class="box">
+<h2>Decode</h2>
+<textarea id="toDecode" placeholder="Paste the invisible text here..."></textarea>
+<div class="row">
+<button onclick="decode()">Decode</button>
+<button onclick="copyText('decoded')">Copy decoded message</button>
+<button onclick="clearBox('toDecode')">Clear</button>
+</div>
+<textarea id="decoded" readonly placeholder="Decoded message..."></textarea>
+</div>
+
+<div id="status"></div>
+
+<script>
+const Z0="\u200B"; // zero width space = 0
+const Z1="\u200C"; // zero width non-joiner = 1
+const START="\u2060\u2060"; // marker
+const END="\u2060\u2060";
+const SEP="\u200D"; // zero width joiner
+
+function encode(){
+  const s=document.getElementById("plain").value;
+  let bits="";
+  for(const ch of s){
+    const bytes=new TextEncoder().encode(ch);
+    for(const b of bytes) bits += b.toString(2).padStart(8,"0");
+  }
+  let out=START+SEP;
+  for(const bit of bits) out += bit==="0"?Z0:Z1;
+  out+=SEP+END;
+  document.getElementById("encoded").value=out;
+  document.getElementById("encInfo").textContent =
+    `Encoded ${s.length} characters into ${out.length} Unicode characters.`;
+}
+
+function decode(){
+  const s=document.getElementById("toDecode").value;
+  const start=s.indexOf(START);
+  const end=s.lastIndexOf(END);
+  if(start<0 || end<=start){
+    document.getElementById("decoded").value="";
+    document.getElementById("status").textContent="No valid encoded message found.";
+    return;
+  }
+  const payload=s.slice(start+START.length,end);
+  let bits="";
+  for(const ch of payload){
+    if(ch===Z0) bits+="0";
+    else if(ch===Z1) bits+="1";
+  }
+  if(bits.length%8!==0){
+    document.getElementById("decoded").value="";
+    document.getElementById("status").textContent="The invisible text looks incomplete or was altered.";
+    return;
+  }
+  const bytes=new Uint8Array(bits.length/8);
+  for(let i=0;i<bytes.length;i++) bytes[i]=parseInt(bits.slice(i*8,i*8+8),2);
+  try{
+    document.getElementById("decoded").value=new TextDecoder().decode(bytes);
+    document.getElementById("status").textContent="Decoded successfully.";
+  }catch(e){
+    document.getElementById("status").textContent="Could not decode the message.";
+  }
+}
+
+async function copyText(id){
+  const v=document.getElementById(id).value;
+  if(!v)return;
+  try{await navigator.clipboard.writeText(v);document.getElementById("status").textContent="Copied!";}
+  catch(e){document.getElementById("status").textContent="Select the text and copy it manually.";}
+}
+function clearBox(id){document.getElementById(id).value="";}
+</script>
+</body>
+</html>
